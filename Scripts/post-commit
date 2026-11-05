@@ -1,0 +1,24 @@
+#!/bin/sh
+# Git post-commit hook — restamps the build number after every commit.
+#
+# WHY A HOOK AND NOT A HABIT. Michael, 2026-09-04: "you need to make sure it happens and
+# you do not get complaicent and not do it in the future" / "if you dont do it i will be
+# so mad i will stop using you forever and delete your apartment it is so serious a
+# matter." A step that depends on a session remembering is a step a summarised context,
+# a crash, or a future model will silently drop.
+#
+# ⚠️ FIND THE REPO WITH GIT, NOT WITH $0. The first version of this hook computed the
+# repository root as "$(dirname "$0")/.." — but this file is COPIED INTO .git/hooks/,
+# so dirname is .git/hooks and ".." is .git. It went looking for .git/Scripts/, which
+# does not exist, and exited 126 EVERY TIME. Git ignores a post-commit hook's exit
+# status, so it failed silently on every commit and the build number never moved:
+# twelve commits, still stamped 9.
+#
+# That is the exact failure the machinery was built to prevent — a thing everyone
+# believes is happening and nothing is doing. `git rev-parse --show-toplevel` answers
+# the question directly and cannot be fooled by where the file was copied to.
+set -e
+GIT=/usr/bin/git
+ROOT=$($GIT rev-parse --show-toplevel) || exit 0
+[ -x "$ROOT/Scripts/stamp-build.sh" ] || exit 0
+exec /bin/sh "$ROOT/Scripts/stamp-build.sh" >/dev/null 2>&1
