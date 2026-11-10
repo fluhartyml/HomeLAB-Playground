@@ -11,6 +11,17 @@
 import SwiftUI
 
 struct ContentView: View {
+    var body: some View {
+        // REM  C-010: the roles are Mac roles ("One Mac app, two roles"); iPhone and iPad keep the About screen.
+        #if os(macOS)
+        MacRootView()
+        #else
+        AboutView()
+        #endif
+    }
+}
+
+struct AboutView: View {
     @ScaledMetric(relativeTo: .largeTitle) private var titleSize: CGFloat = 34
     @ScaledMetric(relativeTo: .body) private var bodySize: CGFloat = 18
 
