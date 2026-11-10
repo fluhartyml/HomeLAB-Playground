@@ -19,14 +19,14 @@ struct MacRootView: View {
     var body: some View {
         switch AppRole(rawValue: roleRaw) {
         case .download?: DownloaderView()
-        case .send?: SenderNoteView()
+        case .send?: SenderView()
         case nil: RoleQuestionView()
         }
     }
 }
 
 /// The header every Mac window shares: name, build, Settings.
-private struct HeaderView: View {
+struct HeaderView: View {
     @ScaledMetric(relativeTo: .title) private var titleSize: CGFloat = 28
     @ScaledMetric(relativeTo: .body) private var bodySize: CGFloat = 18
 
@@ -80,28 +80,6 @@ struct RoleQuestionView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-}
-
-// MARK: - Sending Mac
-
-struct SenderNoteView: View {
-    @ScaledMetric(relativeTo: .body) private var bodySize: CGFloat = 18
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HeaderView()
-                Divider()
-                Text(AppRole.send.explanation)
-                    .font(.system(size: bodySize))
-                Text("The Mac set to Download does the downloading. To make this Mac the one that downloads, change it in Settings.")
-                    .font(.system(size: bodySize))
-                    .foregroundStyle(.secondary)
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)

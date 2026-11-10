@@ -112,16 +112,33 @@ final class DownloadQueue {
         start()
     }
 
-    /// A link sent from another Mac (LinkService). It goes to the last folder picked on this Mac.
-    func addFromNetwork(_ text: String) -> (ok: Bool, message: String) {
+    /// A link sent from another Mac (LinkService). It goes to the recent folder the sending Mac chose, or else to the
+    /// last folder picked on this Mac.
+    func addFromNetwork(_ text: String, folderPath: String? = nil) -> (ok: Bool, message: String) {
         let found = Self.links(in: text)
         guard !found.isEmpty else { return (false, "That isn’t a download link.") }
-        guard let folder = FolderAccess.lastFolder else {
-            return (false, "The downloading Mac has no download folder yet. Pick one on that Mac first.")
+        let folder: FolderAccess.Pick
+        if let folderPath {
+            guard let recent = FolderAccess.useRecent(path: folderPath) else {
+                return (false, "That folder isn’t in the downloading Mac’s recent folders anymore. Choose another one.")
+            }
+            folder = recent
+        } else {
+            guard let last = FolderAccess.lastFolder else {
+                return (false, "The downloading Mac has no download folder yet. Pick one on that Mac first.")
+            }
+            folder = last
         }
         add(found, to: folder)
-        return (true, found.count == 1 ? "Added to the queue." : "Added \(found.count) links to the queue.")
+        let into = "into “\(folder.url.lastPathComponent)”"
+        return (true, found.count == 1 ? "Added to the queue, \(into)." : "Added \(found.count) links to the queue, \(into).")
     }
+
+    /// True when the queue has a line with this id.
+    func contains(_ id: UUID) -> Bool { items.contains { $0.id == id } }
+
+    /// True when this line is waiting to try again (so Try Again Now means something).
+    func isRetrying(_ id: UUID) -> Bool { items.first { $0.id == id }?.state == .retrying }
 
     // MARK: Changing the list
 

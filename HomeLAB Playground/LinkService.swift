@@ -20,6 +20,16 @@ import Observation
 // REM    → {"op":"add","link":"<one or more links>"}   ← {"kind":"added","ok":true,"message":"Added to the queue."}
 // REM    → {"op":"queue"}                              ← one {"kind":"queue",…}
 // REM    → {"op":"watch"}                              ← {"kind":"queue",…} now and after every change
+// REM  BUILD 3 ADDITIONS (C-021, "Then the MacBook side, for sending links and watching the queue"). Old messages are
+// REM  unchanged; a Mac that doesn't know the new keys ignores them, and the sending Mac only shows a button when the
+// REM  queue message lists its op in "ops" — so neither side ever shows a button the other can't carry out.
+// REM    → {"op":"add","link":…,"folder":"<path from folders>"}  the link goes into that recent folder instead
+// REM    → {"op":"cancel","id":"<item id>"}       ← {"kind":"result","op":"cancel","ok":Bool,"message":String}
+// REM    → {"op":"retry","id":"<item id>"}        ← {"kind":"result","op":"retry",…}    (Try Again Now)
+// REM    → {"op":"cancelRest","group":"<group>"}  ← {"kind":"result","op":"cancelRest",…}
+// REM    → {"op":"clearFinished"}                 ← {"kind":"result","op":"clearFinished",…}
+// REM    queue message gains "ops":[…], "destination":{"path","name"}? (where a link goes now) and
+// REM    "folders":[{"path","name"},…] (this Mac's recent folders, newest first).
 @MainActor
 @Observable
 final class LinkService {
@@ -105,6 +115,14 @@ final class LinkService {
         sendToWatchers()
     }
 
+    /// The download folder or the recent list changed: the watching Macs get it at once.
+    func foldersChanged() {
+        sendToWatchers()
+    }
+
+    /// Every op this build answers — the sending Mac shows a control only when its op is listed here.
+    static let ops = ["add", "add.folder", "queue", "watch", "cancel", "retry", "cancelRest", "clearFinished"]
+
     // MARK: Connections
 
     private func accept(_ connection: NWConnection) {
@@ -145,8 +163,37 @@ final class LinkService {
               let op = request["op"] as? String else { return }
         switch op {
         case "add":
-            let result = DownloadQueue.shared.addFromNetwork((request["link"] as? String) ?? "")
+            let result = DownloadQueue.shared.addFromNetwork((request["link"] as? String) ?? "",
+                                                            folderPath: request["folder"] as? String)
             send(["kind": "added", "ok": result.ok, "message": result.message], to: connection)
+        case "cancel":
+            let queue = DownloadQueue.shared
+            guard let id = (request["id"] as? String).flatMap(UUID.init(uuidString:)), queue.contains(id) else {
+                reply(op, ok: false, "That file isn’t in the queue anymore.", to: connection)
+                return
+            }
+            let wasDone = queue.items.first { $0.id == id }?.isFinished ?? false
+            queue.remove(id)
+            reply(op, ok: true, wasDone ? "Removed from the list. The file stays in its folder." : "Download canceled.", to: connection)
+        case "retry":
+            let queue = DownloadQueue.shared
+            guard let id = (request["id"] as? String).flatMap(UUID.init(uuidString:)), queue.isRetrying(id) else {
+                reply(op, ok: false, "That file isn’t waiting to try again anymore.", to: connection)
+                return
+            }
+            queue.tryNow(id)
+            reply(op, ok: true, "Trying again now.", to: connection)
+        case "cancelRest":
+            guard let group = request["group"] as? String,
+                  DownloadQueue.shared.items.contains(where: { $0.group == group && !$0.isFinished }) else {
+                reply(op, ok: false, "Nothing is left to cancel there.", to: connection)
+                return
+            }
+            DownloadQueue.shared.removeUnfinished(inGroup: group)
+            reply(op, ok: true, "The rest of “\(group)” is canceled.", to: connection)
+        case "clearFinished":
+            DownloadQueue.shared.clearFinished()
+            reply(op, ok: true, "Finished files cleared from the list. The files stay in their folders.", to: connection)
         case "queue":
             send(snapshot(), to: connection)
         case "watch":
@@ -156,6 +203,10 @@ final class LinkService {
         default:
             break
         }
+    }
+
+    private func reply(_ op: String, ok: Bool, _ message: String, to connection: NWConnection) {
+        send(["kind": "result", "op": op, "ok": ok, "message": message], to: connection)
     }
 
     private func forget(_ connection: NWConnection) {
@@ -200,6 +251,10 @@ final class LinkService {
             },
         ]
         if let notice { message["notice"] = ["text": notice.text, "at": iso.string(from: notice.at)] }
+        message["ops"] = Self.ops
+        let folders = FolderAccess.recentFolders
+        message["folders"] = folders.map { ["path": $0.path, "name": $0.name] }
+        if let now = folders.first { message["destination"] = ["path": now.path, "name": now.name] }
         return message
     }
 }

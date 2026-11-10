@@ -39,15 +39,19 @@ nonisolated enum AppRole: String, CaseIterable, Sendable {
 
 @MainActor
 enum RoleRunner {
-    /// Starts or stops the downloading side to match this Mac's role.
+    /// Starts or stops each side to match this Mac's role.
+    // REM  C-021: a Mac set to Send links looks for the downloading Mac (DownloaderLink) from launch, so its alerts
+    // REM  (C-015) and notices (C-034) arrive even before you look at the window.
     static func apply(_ role: AppRole?) {
         if role == .download {
+            DownloaderLink.shared.stop()
             DownloadQueue.shared.start()
             LinkService.shared.start()
             MorningRestart.start()
         } else {
             DownloadQueue.shared.stop()
             LinkService.shared.stop()
+            if role == .send { DownloaderLink.shared.start() } else { DownloaderLink.shared.stop() }
         }
     }
 
