@@ -22,7 +22,15 @@ struct HomeLABPlaygroundApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if os(macOS)
+            // REM  C-004: a link from Safari's Share menu arrives as homelabplayground://add?link=… . The open window
+            // REM  takes it (no second window per link); ShareInbox holds it until that Mac's paste box picks it up.
             ContentView()
+                .onOpenURL { ShareInbox.shared.receive($0) }
+                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
+            #else
+            ContentView()
+            #endif
         }
         #if os(macOS)
         Settings {

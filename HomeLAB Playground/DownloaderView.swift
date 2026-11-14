@@ -112,6 +112,16 @@ struct DownloaderView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(minWidth: 560, minHeight: 480)
+        .onAppear(perform: takeShared)
+        .onChange(of: ShareInbox.shared.pending) { _, _ in takeShared() }
+    }
+
+    // REM  C-004: a link from Safari's Share menu goes the paste box's way on this Mac: into the box, then the folder
+    // REM  window opens so you pick where it goes, just as pressing Choose Folder and Download would.
+    private func takeShared() {
+        guard let shared = ShareInbox.shared.take() else { return }
+        linkText = shared
+        add()
     }
 
     private var networkLine: some View {

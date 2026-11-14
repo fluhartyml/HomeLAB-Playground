@@ -9,8 +9,9 @@
 import SwiftUI
 
 // REM  C-021: "Then the MacBook side, for sending links and watching the queue."
-// REM  C-004: "Paste into the app's window" — the paste box. (Safari's Share menu, the other half of C-004, needs its
-// REM  own Share extension target; it is not in this build.)
+// REM  C-004: "Paste into the app's window" — the paste box. Safari's Share menu (the other half, his "yes both") puts
+// REM  its link in this same box and sends it at once when connected; if not connected, it waits in the box and goes
+// REM  by itself the moment the connection is up.
 // REM  C-005 on this side: this Mac can't open the downloading Mac's folder window, so it shows where the link will go
 // REM  and lets you pick from that Mac's recent folders. A folder that isn't listed is picked once on that Mac.
 // REM  C-014: "each file, how far along it is, and which are done" — the same rows the downloading Mac shows, with
@@ -23,6 +24,7 @@ struct SenderView: View {
     @State private var linkText = ""
     @State private var folderPick: String?
     @State private var localMessage: String?
+    @State private var sharedWaiting = false
 
     private var link: DownloaderLink { DownloaderLink.shared }
 
@@ -41,9 +43,35 @@ struct SenderView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(minWidth: 560, minHeight: 480)
-        .onAppear { link.start() }
+        .onAppear {
+            link.start()
+            takeShared()
+        }
+        .onChange(of: ShareInbox.shared.pending) { _, _ in takeShared() }
+        .onChange(of: link.isConnected) { _, _ in sendShared() }
+        .onChange(of: link.sending) { _, _ in sendShared() }
         .onChange(of: link.addReply?.ok) { _, ok in
             if ok == true { linkText = "" }
+        }
+    }
+
+    // MARK: From Safari's Share menu
+
+    private func takeShared() {
+        guard let shared = ShareInbox.shared.take() else { return }
+        let current = linkText.trimmingCharacters(in: .whitespacesAndNewlines)
+        linkText = current.isEmpty ? shared : current + "\n" + shared
+        sharedWaiting = true
+        sendShared()
+    }
+
+    private func sendShared() {
+        guard sharedWaiting else { return }
+        if link.isConnected, !link.sending {
+            sharedWaiting = false
+            send()
+        } else if !link.isConnected {
+            localMessage = "A link from Safari’s Share menu is in the box. It sends by itself once this Mac connects."
         }
     }
 
